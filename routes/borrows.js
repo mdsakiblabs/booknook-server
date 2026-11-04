@@ -157,4 +157,83 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Return a borrowed book
+router.delete("/:id", async (req, res) => {
+  const db = getDB();
+  const client = getClient();
+
+  const borrowId = req.params.id;
+
+  if (!ObjectId.isValid(borrowId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid borrow ID",
+    });
+  }
+
+  const session = client.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      const borrowsCollection = db.collection("borrows");
+      const booksCollection = db.collection("books");
+
+      // Find borrow record
+      const borrow = await borrowsCollection.findOne(
+        { _id: new ObjectId(borrowId) },
+        { session },
+      );
+
+      if (!borrow) {
+        throw Object.assign(new Error("Borrow record not found"), {
+          statusCode: 404,
+        });
+      }
+
+      // Increase available copies
+      const updateResult = await booksCollection.updateOne(
+        {
+          _id: new ObjectId(borrow.bookId),
+          $expr: {
+            $lt: ["$availableCopies", "$totalCopies"],
+          },
+        },
+        {
+          $inc: { availableCopies: 1 },
+        },
+        { session },
+      );
+
+      if (updateResult.matchedCount === 0) {
+        throw Object.assign(
+          new Error("Book not found or stock limit reached"),
+          {
+            statusCode: 409,
+          },
+        );
+      }
+
+      // Delete borrow record
+      await borrowsCollection.deleteOne(
+        { _id: new ObjectId(borrowId) },
+        { session },
+      );
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Book returned successfully",
+    });
+  } catch (error) {
+    console.error("Failed to return book:", error);
+
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to return book",
+    });
+  } finally {
+    await session.endSession();
+  }
+});
+
 export default router;
