@@ -1,18 +1,21 @@
 import express from "express";
 import { ObjectId } from "mongodb";
 import { getDB, getClient } from "../config/db.js";
-
+import { verifyToken } from "../middleware/verifyToken.js";
 const router = express.Router();
 
 // Borrow a book
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   const db = getDB();
   const client = getClient();
 
-  const { bookId, userName, userEmail, returnDate } = req.body;
+  const { bookId, returnDate } = req.body;
+
+  const userName = req.user.name;
+  const userEmail = req.user.email;
 
   // Validate input
-  if (!bookId || !userName || !userEmail || !returnDate) {
+  if (!bookId || !returnDate) {
     return res.status(400).json({
       success: false,
       message: "All fields are required",
@@ -131,14 +134,12 @@ router.post("/", async (req, res) => {
 });
 
 // Get all borrowed books
-router.get("/", async (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
     const db = getDB();
-    const { userEmail } = req.query;
-
     const borrows = await db
       .collection("borrows")
-      .find(userEmail ? { userEmail } : {})
+      .find({ userEmail: req.user.email })
       .sort({ borrowDate: -1 })
       .toArray();
 
@@ -158,7 +159,7 @@ router.get("/", async (req, res) => {
 });
 
 // Return a borrowed book
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", verifyToken, async (req, res) => {
   const db = getDB();
   const client = getClient();
 
@@ -180,7 +181,10 @@ router.delete("/:id", async (req, res) => {
 
       // Find borrow record
       const borrow = await borrowsCollection.findOne(
-        { _id: new ObjectId(borrowId) },
+        {
+          _id: new ObjectId(borrowId),
+          userEmail: req.user.email,
+        },
         { session },
       );
 
@@ -215,7 +219,10 @@ router.delete("/:id", async (req, res) => {
 
       // Delete borrow record
       await borrowsCollection.deleteOne(
-        { _id: new ObjectId(borrowId) },
+        {
+          _id: new ObjectId(borrowId),
+          userEmail: req.user.email,
+        },
         { session },
       );
     });

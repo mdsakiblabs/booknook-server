@@ -73,8 +73,31 @@ router.post("/", verifyToken, async (req, res) => {
   try {
     const db = getDB();
 
+    const { title, author, category, image, description, totalCopies } =
+      req.body;
+
+    // Validate required fields
+    if (
+      !title?.trim() ||
+      !author?.trim() ||
+      !category?.trim() ||
+      !Number.isInteger(totalCopies) ||
+      totalCopies < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide valid book information",
+      });
+    }
+
     const newBook = {
-      ...req.body,
+      title: title.trim(),
+      author: author.trim(),
+      category: category.trim(),
+      image: image || "",
+      description: description || "",
+      totalCopies,
+      availableCopies: totalCopies,
       addedBy: req.user.name,
       addedByEmail: req.user.email,
       createdAt: new Date(),
@@ -110,7 +133,32 @@ router.patch("/:id", verifyToken, async (req, res) => {
       });
     }
 
-    const { _id, createdAt, addedBy, addedByEmail, ...updatedData } = req.body;
+    const allowedFields = [
+      "title",
+      "author",
+      "category",
+      "image",
+      "description",
+    ];
+
+    const updatedData = {};
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updatedData[field] = req.body[field];
+      }
+    }
+
+    for (const [field, value] of Object.entries(updatedData)) {
+      if (typeof value !== "string" || !value.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid value for ${field}`,
+        });
+      }
+
+      updatedData[field] = value.trim();
+    }
 
     if (Object.keys(updatedData).length === 0) {
       return res.status(400).json({
@@ -160,6 +208,17 @@ router.delete("/:id", verifyToken, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid book ID",
+      });
+    }
+
+    const activeBorrow = await db.collection("borrows").findOne({
+      bookId: bookId,
+    });
+
+    if (activeBorrow) {
+      return res.status(409).json({
+        success: false,
+        message: "Cannot delete a book with active borrows",
       });
     }
 
