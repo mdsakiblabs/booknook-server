@@ -1,7 +1,7 @@
 import express from "express";
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/db.js";
-
+import { verifyToken } from "../middleware/verifyToken.js";
 const router = express.Router();
 // Get all books
 router.get("/", async (req, res) => {
@@ -30,7 +30,7 @@ router.get("/", async (req, res) => {
 });
 
 // Get a single book by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", verifyToken, async (req, res) => {
   try {
     const db = getDB();
 
@@ -69,12 +69,14 @@ router.get("/:id", async (req, res) => {
 });
 
 // Add a new book
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
     const db = getDB();
 
     const newBook = {
       ...req.body,
+      addedBy: req.user.name,
+      addedByEmail: req.user.email,
       createdAt: new Date(),
     };
 
@@ -96,7 +98,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update a book
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", verifyToken, async (req, res) => {
   try {
     const db = getDB();
     const bookId = req.params.id;
@@ -108,7 +110,7 @@ router.patch("/:id", async (req, res) => {
       });
     }
 
-    const { _id, createdAt, ...updatedData } = req.body;
+    const { _id, createdAt, addedBy, addedByEmail, ...updatedData } = req.body;
 
     if (Object.keys(updatedData).length === 0) {
       return res.status(400).json({
@@ -117,14 +119,20 @@ router.patch("/:id", async (req, res) => {
       });
     }
 
-    const result = await db
-      .collection("books")
-      .updateOne({ _id: new ObjectId(bookId) }, { $set: updatedData });
+    const result = await db.collection("books").updateOne(
+      {
+        _id: new ObjectId(bookId),
+        addedByEmail: req.user.email,
+      },
+      {
+        $set: updatedData,
+      },
+    );
 
     if (result.matchedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Book not found",
+        message: "Book not found or you are not the owner",
       });
     }
 
@@ -143,7 +151,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 // Delete a book
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", verifyToken, async (req, res) => {
   try {
     const db = getDB();
     const bookId = req.params.id;
@@ -157,12 +165,13 @@ router.delete("/:id", async (req, res) => {
 
     const result = await db.collection("books").deleteOne({
       _id: new ObjectId(bookId),
+      addedByEmail: req.user.email,
     });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Book not found",
+        message: "Book not found or you are not the owner",
       });
     }
 

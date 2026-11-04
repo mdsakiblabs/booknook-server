@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import booksRouter from "./routes/books.js";
 import borrowsRouter from "./routes/borrows.js";
+import { verifyToken } from "./middleware/verifyToken.js";
 
 dotenv.config();
 
@@ -25,6 +26,14 @@ app.use("/borrows", borrowsRouter);
 // Test route
 app.get("/", (req, res) => {
   res.send("BookNook API is running!");
+});
+
+app.get("/protected-test", verifyToken, (req, res) => {
+  res.json({
+    success: true,
+    message: "JWT verification successful!",
+    user: req.user,
+  });
 });
 
 // Start server
