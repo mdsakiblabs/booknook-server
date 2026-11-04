@@ -95,4 +95,51 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Update a book
+router.patch("/:id", async (req, res) => {
+  try {
+    const db = getDB();
+    const bookId = req.params.id;
+
+    if (!ObjectId.isValid(bookId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid book ID",
+      });
+    }
+
+    const { _id, createdAt, ...updatedData } = req.body;
+
+    if (Object.keys(updatedData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No update data provided",
+      });
+    }
+
+    const result = await db
+      .collection("books")
+      .updateOne({ _id: new ObjectId(bookId) }, { $set: updatedData });
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Book not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Book updated successfully",
+    });
+  } catch (error) {
+    console.error("Failed to update book:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update book",
+    });
+  }
+});
+
 export default router;
