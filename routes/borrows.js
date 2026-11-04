@@ -130,4 +130,31 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Get all borrowed books
+router.get("/", async (req, res) => {
+  try {
+    const db = getDB();
+    const { userEmail } = req.query;
+
+    const borrows = await db
+      .collection("borrows")
+      .find(userEmail ? { userEmail } : {})
+      .sort({ borrowDate: -1 })
+      .toArray();
+
+    res.status(200).json({
+      success: true,
+      count: borrows.length,
+      borrows,
+    });
+  } catch (error) {
+    console.error("Failed to fetch borrows:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch borrowed books",
+    });
+  }
+});
+
 export default router;
