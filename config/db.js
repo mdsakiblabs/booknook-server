@@ -11,6 +11,18 @@ export const connectDB = async () => {
 
     db = client.db("booknook");
 
+    await db.collection("borrows").createIndexes([
+      {
+        key: { bookId: 1, userEmail: 1 },
+        unique: true,
+        name: "unique_book_user_borrow",
+        partialFilterExpression: {
+          bookId: { $exists: true },
+          userEmail: { $exists: true },
+        },
+      },
+    ]);
+
     console.log("MongoDB connected successfully!");
 
     return db;
@@ -21,3 +33,4 @@ export const connectDB = async () => {
 };
 
 export const getDB = () => db;
+export const getClient = () => client;
