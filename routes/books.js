@@ -59,9 +59,16 @@ router.get("/:id", verifyToken, async (req, res) => {
       });
     }
 
-    const book = await db.collection("books").findOne({
-      _id: new ObjectId(bookId),
-    });
+    const book = await db.collection("books").findOne(
+      {
+        _id: new ObjectId(bookId),
+      },
+      {
+        projection: {
+          addedByEmail: 0,
+        },
+      },
+    );
 
     if (!book) {
       return res.status(404).json({
@@ -83,8 +90,6 @@ router.get("/:id", verifyToken, async (req, res) => {
     });
   }
 });
-
-// Add a new book
 
 // Add a new book
 router.post("/", verifyToken, async (req, res) => {
