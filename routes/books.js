@@ -1,6 +1,6 @@
 import express from "express";
 import { ObjectId } from "mongodb";
-import { getDB } from "../config/db.js";
+import { getDB, getClient } from "../config/db.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 const router = express.Router();
 
