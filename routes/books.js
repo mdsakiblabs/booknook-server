@@ -351,39 +351,60 @@ router.patch("/:id", verifyToken, async (req, res) => {
 
 // Delete a book
 router.delete("/:id", verifyToken, async (req, res) => {
+  const db = getDB();
+  const client = getClient();
+
+  const bookId = req.params.id;
+
+  if (!ObjectId.isValid(bookId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid book ID",
+    });
+  }
+
+  const session = client.startSession();
+
   try {
-    const db = getDB();
-    const bookId = req.params.id;
+    await session.withTransaction(async () => {
+      const booksCollection = db.collection("books");
+      const borrowsCollection = db.collection("borrows");
 
-    if (!ObjectId.isValid(bookId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid book ID",
-      });
-    }
+      const book = await booksCollection.findOne(
+        {
+          _id: new ObjectId(bookId),
+          addedByEmail: req.user.email,
+        },
+        { session },
+      );
 
-    const activeBorrow = await db.collection("borrows").findOne({
-      bookId: bookId,
+      if (!book) {
+        throw Object.assign(
+          new Error("Book not found or you are not the owner"),
+          { statusCode: 404 },
+        );
+      }
+
+      const activeBorrow = await borrowsCollection.findOne(
+        { bookId },
+        { session },
+      );
+
+      if (activeBorrow) {
+        throw Object.assign(
+          new Error("Cannot delete a book with active borrows"),
+          { statusCode: 409 },
+        );
+      }
+
+      await booksCollection.deleteOne(
+        {
+          _id: new ObjectId(bookId),
+          addedByEmail: req.user.email,
+        },
+        { session },
+      );
     });
-
-    if (activeBorrow) {
-      return res.status(409).json({
-        success: false,
-        message: "Cannot delete a book with active borrows",
-      });
-    }
-
-    const result = await db.collection("books").deleteOne({
-      _id: new ObjectId(bookId),
-      addedByEmail: req.user.email,
-    });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Book not found or you are not the owner",
-      });
-    }
 
     res.status(200).json({
       success: true,
@@ -392,10 +413,12 @@ router.delete("/:id", verifyToken, async (req, res) => {
   } catch (error) {
     console.error("Failed to delete book:", error);
 
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Failed to delete book",
+      message: error.message || "Failed to delete book",
     });
+  } finally {
+    await session.endSession();
   }
 });
 
