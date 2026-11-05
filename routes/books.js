@@ -3,31 +3,47 @@ import { ObjectId } from "mongodb";
 import { getDB } from "../config/db.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 const router = express.Router();
+
 // Get all books
-router.get("/", async (req, res) => {
-  try {
-    const db = getDB();
+router.get(
+  "/",
+  (req, res, next) => {
+    if (req.query.mine === "true") {
+      return verifyToken(req, res, next);
+    }
 
-    const books = await db
-      .collection("books")
-      .find()
-      .sort({ createdAt: -1 })
-      .toArray();
+    next();
+  },
+  async (req, res) => {
+    try {
+      const db = getDB();
+      const isMyBooksRequest = req.query.mine === "true";
 
-    res.status(200).json({
-      success: true,
-      count: books.length,
-      books,
-    });
-  } catch (error) {
-    console.error("Failed to fetch books:", error);
+      const filter = isMyBooksRequest ? { addedByEmail: req.user.email } : {};
 
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch books",
-    });
-  }
-});
+      const books = await db
+        .collection("books")
+        .find(filter, {
+          projection: { addedByEmail: 0 },
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.status(200).json({
+        success: true,
+        count: books.length,
+        books,
+      });
+    } catch (error) {
+      console.error("Failed to fetch books:", error);
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch books",
+      });
+    }
+  },
+);
 
 // Get a single book by ID
 router.get("/:id", verifyToken, async (req, res) => {
