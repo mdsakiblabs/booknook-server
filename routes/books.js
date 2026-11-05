@@ -69,12 +69,29 @@ router.get("/:id", verifyToken, async (req, res) => {
 });
 
 // Add a new book
+
+// Add a new book
 router.post("/", verifyToken, async (req, res) => {
   try {
     const db = getDB();
 
-    const { title, author, category, image, description, totalCopies } =
-      req.body;
+    const {
+      title,
+      subtitle,
+      author,
+      category,
+      image,
+      description,
+      isbn,
+      publisher,
+      publishedYear,
+      pages,
+      language,
+      format,
+      tags,
+      featured,
+      totalCopies,
+    } = req.body;
 
     // Validate required fields
     if (
@@ -90,14 +107,58 @@ router.post("/", verifyToken, async (req, res) => {
       });
     }
 
+    // Validate optional numeric fields
+    if (
+      (publishedYear !== undefined &&
+        (!Number.isInteger(publishedYear) || publishedYear < 1)) ||
+      (pages !== undefined && (!Number.isInteger(pages) || pages < 1))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid published year or page count",
+      });
+    }
+
+    // Validate tags
+    if (
+      tags !== undefined &&
+      (!Array.isArray(tags) ||
+        !tags.every((tag) => typeof tag === "string" && tag.trim()))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Tags must be an array of valid strings",
+      });
+    }
+
+    // Validate featured
+    if (featured !== undefined && typeof featured !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "Featured must be a boolean value",
+      });
+    }
+
     const newBook = {
       title: title.trim(),
+      subtitle: subtitle?.trim() || "",
       author: author.trim(),
       category: category.trim(),
-      image: image || "",
-      description: description || "",
+      image: image?.trim() || "",
+      description: description?.trim() || "",
+
+      isbn: isbn?.trim() || "",
+      publisher: publisher?.trim() || "",
+      publishedYear: publishedYear || null,
+      pages: pages || null,
+      language: language?.trim() || "",
+      format: format?.trim() || "",
+      tags: tags?.map((tag) => tag.trim()) || [],
+      featured: featured ?? false,
+
       totalCopies,
       availableCopies: totalCopies,
+
       addedBy: req.user.name,
       addedByEmail: req.user.email,
       createdAt: new Date(),
@@ -135,10 +196,19 @@ router.patch("/:id", verifyToken, async (req, res) => {
 
     const allowedFields = [
       "title",
+      "subtitle",
       "author",
       "category",
       "image",
       "description",
+      "isbn",
+      "publisher",
+      "publishedYear",
+      "pages",
+      "language",
+      "format",
+      "tags",
+      "featured",
     ];
 
     const updatedData = {};
@@ -149,15 +219,75 @@ router.patch("/:id", verifyToken, async (req, res) => {
       }
     }
 
-    for (const [field, value] of Object.entries(updatedData)) {
-      if (typeof value !== "string" || !value.trim()) {
+    // Validate string fields
+    const stringFields = [
+      "title",
+      "subtitle",
+      "author",
+      "category",
+      "image",
+      "description",
+      "isbn",
+      "publisher",
+      "language",
+      "format",
+    ];
+
+    for (const field of stringFields) {
+      if (updatedData[field] !== undefined) {
+        if (
+          typeof updatedData[field] !== "string" ||
+          (["title", "author", "category"].includes(field) &&
+            !updatedData[field].trim())
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid value for ${field}`,
+          });
+        }
+
+        updatedData[field] = updatedData[field].trim();
+      }
+    }
+
+    // Validate numeric fields
+    for (const field of ["publishedYear", "pages"]) {
+      if (
+        updatedData[field] !== undefined &&
+        updatedData[field] !== null &&
+        (!Number.isInteger(updatedData[field]) || updatedData[field] < 1)
+      ) {
         return res.status(400).json({
           success: false,
           message: `Invalid value for ${field}`,
         });
       }
+    }
 
-      updatedData[field] = value.trim();
+    // Validate tags
+    if (updatedData.tags !== undefined) {
+      if (
+        !Array.isArray(updatedData.tags) ||
+        !updatedData.tags.every((tag) => typeof tag === "string" && tag.trim())
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Tags must be an array of valid strings",
+        });
+      }
+
+      updatedData.tags = updatedData.tags.map((tag) => tag.trim());
+    }
+
+    // Validate featured
+    if (
+      updatedData.featured !== undefined &&
+      typeof updatedData.featured !== "boolean"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Featured must be a boolean value",
+      });
     }
 
     if (Object.keys(updatedData).length === 0) {
