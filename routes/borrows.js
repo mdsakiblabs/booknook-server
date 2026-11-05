@@ -139,7 +139,14 @@ router.get("/", verifyToken, async (req, res) => {
     const db = getDB();
     const borrows = await db
       .collection("borrows")
-      .find({ userEmail: req.user.email })
+      .find(
+        { userEmail: req.user.email },
+        {
+          projection: {
+            userEmail: 0,
+          },
+        },
+      )
       .sort({ borrowDate: -1 })
       .toArray();
 
